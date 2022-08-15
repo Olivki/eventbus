@@ -50,7 +50,11 @@ Registering a new annotation based event listener:
 
 [source,kotlin]
 ----
-class ListenerClass {
+class ListenerClass(eventBus: EventBus<Any, Event>) {
+    init {
+        eventBus.subscribe(this)
+    }
+
     @Subscribed
     fun listener(event: MessageEvent) {
         println(event.message)
@@ -61,8 +65,7 @@ class MessageEvent(val message: String) : Event
 
 fun main() {
     val eventBus = EventBus.newDefault()
-    val listener = ListenerClass()
-    eventBus.subscribe(listener)
+    val listener = ListenerClass(eventBus)
     eventBus.fire(MessageEvent("Hello, World!"))
     // 'Hello, World!' will be printed to std-out
 }
@@ -111,10 +114,12 @@ Registering a new annotation based event listener:
 
 [source,java]
 ----
-
-
 public class Example {
     public class ListenerClass {
+        public ListenerClass(EventBus<Object, Event> eventBus) {
+            eventBus.subscribe(this, MethodHandle.lookup());
+        }
+
         @Subscribed
         public void listener(final MessageEvent event) {
             System.out.println(event.message());
@@ -125,8 +130,7 @@ public class Example {
 
     public static void main(String[] args) {
         var eventBus = EventBus.newDefault();
-        var listener = new ListenerClass();
-        eventBus.subscribe(listener);
+        var listener = new ListenerClass(eventBus);
         eventBus.fire(new MessageEvent("Hello, World!"));
         // 'Hello, World!' will be printed to std-out
     }
