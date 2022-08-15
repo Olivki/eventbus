@@ -1,0 +1,5 @@
+**/.gradle/
+**/.idea/
+**/build/
+# Project exclude paths
+/core/out/production/classes/

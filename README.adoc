@@ -1,0 +1,166 @@
+= eventbus
+
+image::https://img.shields.io/maven-central/v/net.ormr.eventbus/eventbus-core?label=release&style=for-the-badge[Maven Central]
+
+:toc:
+
+This is a simple https://en.wikipedia.org/wiki/Publish%E2%80%93subscribe_pattern[publish-subscribe] style event handling library for Kotlin/JVM, with support for using it from Java.
+
+It has support for annotation based event-listener registration `+@Subscribed fun listener(event: Event) { ... }+`, and callback based
+registration `+eventBus.on<Event> { ... }+`.
+
+The callback based variant is based on suspend functions.
+
+The library comes with 3 `+EventExecutorFactory+` implementations provided by default, a reflection based one, a
+`+MethodHandle+` based one, and an ASM based one that dynamically compiles new Java dispatcher classes at runtime. The
+ASM based factory is by far the fastest, with the `+MethodHandle+` one being second, and the reflection one being the
+slowest. Do note that the gap between the ASM approach and the `+MethodHandle+` approach is quite large, but the gap
+between the `+MethodHandle+` approach and the reflection one isn't _that_ large.
+
+While the ASM factory is the _fastest_, it is the only factory that can't create dispatchers for `+private+` functions,
+`+reflection+` can invoke them if `+invokePrivate+` was set to `+true+` when created, and `+method handles+` can invoke
+them if the `+MethodHandle.Lookup+` instance passed to the `+EventBus.subscribe+` function belongs to the actual listener
+instance the `+private+` function is defined in. None of the factories can create dispatchers that handle
+package-private functions.
+
+== Installation
+
+[source,kotlin]
+----
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation("net.ormr.eventbus:eventbus-core:${EVENTBUS_VERSION}")
+}
+----
+
+== Usage
+
+=== Kotlin
+==== New Instance
+To create a new `+EventBus+` instance for custom event and/or listener types, invoke `+EventBus<CustomListener, CustomEvent>()+`,
+for a new instance using the default `+<Any, Event>+` types, invoke `+EventBus.newDefault()+`.
+
+Both functions optionally take a parameter for the `+EventExecutorFactory+` to use.
+
+==== Managing Listeners
+Registering a new annotation based event listener:
+
+[source,kotlin]
+----
+class ListenerClass {
+    @Subscribed
+    fun listener(event: MessageEvent) {
+        println(event.message)
+    }
+}
+
+class MessageEvent(val message: String) : Event
+
+fun main() {
+    val eventBus = EventBus.newDefault()
+    val listener = ListenerClass()
+    eventBus.subscribe(listener)
+    eventBus.fire(MessageEvent("Hello, World!"))
+    // 'Hello, World!' will be printed to std-out
+}
+----
+
+The annotation based event listener can also be unregistered:
+
+[source,kotlin]
+----
+fun main() {
+    // ...
+    eventBus.unsubscribe(listener)
+    eventBus.fire(MessageEvent("Goodbye, World!"))
+    // 'Goodbye, World!' will not be printed to std-out
+}
+----
+
+Registering a new callback based event listener:
+
+[source,kotlin]
+----
+suspend fun main() {
+    val eventBus = EventBus.newDefault()
+    eventBus.on<BasicEvent> { println(message) }
+    // for actual suspended firing
+    eventBus.fireSuspended(MessageEvent("Hello, World!"))
+    // for blocking firing, equivalent of doing runBlocking { eventBus.fireSuspended(event) }
+    // eventBus.fire(MessageEvent("Hello, World!")
+    // 'Hello, World!' will be printed to std-out
+}
+----
+
+Callback based event listeners can _not_ be removed/unsubscribed, as they hold no real identity to query against.
+
+'''
+
+=== Java
+==== New Instance
+To create a new `+EventBus+` instance for custom event and/or listener types, invoke `+new EventBus<>(CustomListener.class, CustomEvent.class)+`,
+for a new instance using the default `+<Object, Event>+` types, invoke `+EventBus.newDefault()+`.
+
+Both functions optionally take a parameter for the `+EventExecutorFactory+` to use.
+
+==== Managing Listeners
+Registering a new annotation based event listener:
+
+[source,java]
+----
+
+
+public class Example {
+    public class ListenerClass {
+        @Subscribed
+        public void listener(final MessageEvent event) {
+            System.out.println(event.message());
+        }
+    }
+
+    public record MessageEvent(String message) implements Event {}
+
+    public static void main(String[] args) {
+        var eventBus = EventBus.newDefault();
+        var listener = new ListenerClass();
+        eventBus.subscribe(listener);
+        eventBus.fire(new MessageEvent("Hello, World!"));
+        // 'Hello, World!' will be printed to std-out
+    }
+}
+----
+
+The annotation based event listener can also be unregistered:
+
+[source,java]
+----
+public class Example {
+    public static void main(String[] args) {
+        // ...
+        eventBus.unsubscribe(listener);
+        eventBus.fire(MessageEvent("Goodbye, World!"));
+        // 'Goodbye, World!' will not be printed to std-out
+    }
+}
+----
+
+Registering a new callback based event listener:
+
+[source,java]
+----
+public class Example {
+    public static void main(String[] args) {
+        var eventBus = EventBus.newDefault();
+        eventBus.on(MessageEvent.class, event -> System.out.println(event.message()));
+        // Java does not know anything of Kotlin suspensions, and therefore when firing an event from the Java world
+        // it will always be fired in a blocking manner.
+        eventBus.fire(new MessageEvent("Hello, World!"));
+        // 'Hello, World!' will be printed to std-out
+    }
+}
+----
+
+Callback based event listeners can _not_ be removed/unsubscribed, as they hold no real identity to query against.
